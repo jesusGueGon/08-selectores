@@ -1,14 +1,21 @@
 import { Injectable } from '@angular/core';
-import { Region, SmallCountry } from '../interfaces/country.interfaces';
+import { Country, Region, SmallCountry } from '../interfaces/country.interfaces';
+import { Observable, combineLatest, map, of, tap } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
 
 @Injectable({
   providedIn: 'root'
 })
 export class CountriesService {
 
+  private baseUrl: string = 'https://restcountries.com/v3.1';
+
+
   private _regions: Region[] = [ Region.Africa, Region.Amercias, Region.Asia, Region.Europe, Region.Oceania ];
 
-  constructor() { }
+  constructor(
+    private http: HttpClient
+  ) { }
 
   get regions(): Region[] {
 
@@ -16,12 +23,53 @@ export class CountriesService {
 
   }
 
-  getCountriesByRegion(region: Region): SmallCountry[]
+  getCountriesByRegion(region: Region): Observable<SmallCountry[]>
   {
 
-    return [];
+    if(!region) return of([]);
+
+    const url: string = `${this.baseUrl}/region/${region}?fields=cca3,name,borders`;
+
+    return this.http.get<Country[]>(url)
+    .pipe(
+      map( countries => countries.map( country => ({
+        name: country.name.common,
+        cca3: country.cca3,
+        borders: country.borders ?? []
+      }))),
+    );
 
   }
+
+  getCountryByAlphaCode( aplhaCode: string): Observable<SmallCountry> {
+
+    const url = `${ this.baseUrl }/alpha/${ aplhaCode }?fields=cca3,name,borders`;
+    return this.http.get<Country>( url )
+    .pipe(
+      map( country => ({
+        name: country.name.common,
+        cca3: country.cca3,
+        borders: country.borders ?? [],
+      }))
+    )
+  }
+
+  getCOuntryBordersByCodes( borders: string[]): Observable<SmallCountry[]> {
+
+    if( !borders || borders.length === 0 ) return of([]);
+
+    const countriesRequests: Observable<SmallCountry>[] = [];
+
+    borders.forEach( code => {
+      const request = this.getCountryByAlphaCode(code);
+      countriesRequests.push( request );
+    });
+
+    return combineLatest( countriesRequests );
+
+  }
+
+
 
 
 }
